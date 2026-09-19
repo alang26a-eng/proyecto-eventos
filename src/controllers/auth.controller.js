@@ -1,8 +1,8 @@
-import { login } from '../services/auth.service.js';
+import { signToken } from '../utils/jwt.js';
 import { config } from '../config/env.config.js';
 const cookieOptions = () => ({ httpOnly: true, sameSite: 'lax', secure: config.nodeEnv === 'production', path: '/' });
-export async function loginUser(req, res) {
-  const payload = await login(req.body);
+export function loginUser(req, res) {
+  const payload = { token: signToken({ ...req.user, _id: req.user.id }), user: req.user };
   res.cookie('currentUser', payload.token, { ...cookieOptions(), maxAge: 3600000 });
   res.json({ status: 'success', message: 'Login correcto', payload });
 }

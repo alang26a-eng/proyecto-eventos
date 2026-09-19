@@ -1,8 +1,8 @@
-# EventHub — Pre-entregas 3 y 7
+# EventHub — Pre-entregas 3, 4 y 7
 API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Se extiende la entrega 2 con los componentes necesarios para este flujo.
 
 ## Tecnologías
-Node.js 22+, Express 5, MongoDB/Mongoose, bcrypt, JSON Web Tokens, Nodemailer y dotenv. JavaScript ESM. Pruebas con Node Test Runner, MongoDB temporal real y servidor SMTP local de pruebas.
+Node.js 22+, Express 5, MongoDB/Mongoose, bcrypt, Passport, passport-custom, JSON Web Tokens, Nodemailer y dotenv. JavaScript ESM. Pruebas con Node Test Runner, MongoDB temporal real y servidor SMTP local de pruebas.
 
 ## Instalación
 ```powershell
@@ -43,10 +43,10 @@ Ruta → controller → service → repository → DAO → modelo. Validaciones 
 ```text
 src/
   app.js, server.js
-  config/             env.config.js, database.js
+  config/             env.config.js, database.js, passport.config.js
   routes/             sessions.router.js, events.router.js, tickets.router.js
   controllers/        sessions, auth, events, tickets
-  services/           sessions, auth, events, tickets, mail
+  services/           events, tickets, mail
   repositories/       users, auth, events, tickets
   dao/                users, auth, events, tickets
   models/             User.js, Event.js, Ticket.js
@@ -59,6 +59,25 @@ tests/
 ```
 
 ## Registro, login y roles
+### Pre-entrega 4: autenticación centralizada con Passport
+
+`src/config/passport.config.js` registra las estrategias de Passport mediante `passport-custom`. Se eligieron callbacks con acceso al request para conservar exactamente las validaciones, códigos HTTP y respuestas JSON existentes, incluso ante campos ausentes o de tipos incorrectos. `app.js` únicamente importa la configuración y ejecuta `passport.initialize()`. No se usan sesiones de servidor: todos los middleware declaran `session: false`.
+
+- **register:** valida los campos, normaliza email, aplica bcrypt, controla unicidad (incluidas altas simultáneas) y fuerza role=user. El usuario público queda en req.user sin password.
+- **login:** valida credenciales y devuelve un usuario sin password; no firma JWT ni modifica cookies. El controller de autenticación firma el JWT y establece currentUser. El mensaje de credenciales inválidas sigue siendo genérico.
+- **current:** extrae el JWT de la cookie currentUser, valida firma y expiración con utils/jwt.js y deja id/email/role en req.user. Sin token válido responde 401 JSON.
+- **access:** centraliza la autenticación de eventos y tickets, conserva cookie/Bearer y consulta el usuario y rol actual en MongoDB para mantener los permisos existentes.
+
+Las rutas de registro, login y current delegan directamente en `passport.authenticate`. Logout elimina la cookie sin pasar por Passport. Se retiraron los services de autenticación y registro anteriores para evitar tener lógica duplicada. Los services de eventos y tickets conservan sus validaciones de negocio.
+
+El contrato externo se mantiene, incluido payload.token del login para los clientes existentes de tickets. JWT_EXPIRES_IN, JWT_SECRET y los atributos de cookie siguen iguales. No se requieren nuevas variables de entorno para estas estrategias.
+
+El sistema queda preparado para registrar providers externos como Google o GitHub en passport.config.js sin modificar app.js. Todavía no están implementados: requerirían credenciales del proveedor y rutas de autorización/callback.
+
+Ejecutar `npm ci`, `npm test` y `npm audit`. Las pruebas existentes cubren registro-login-current-logout-401, email duplicado, credenciales inválidas, cookies manipuladas/vencidas y regresión de tickets. Se agregó un caso de acceso a tickets mediante cookie a través de Passport.
+
+Referencia: [estrategias de Passport](https://www.passportjs.org/concepts/authentication/strategies/).
+
 ### Pre-entrega 3: sesión con cookie
 
 JWT_EXPIRES_IN configura la duración del JWT, por ejemplo `1h` o `30m`; por defecto es `1h`. JWT_SECRET se guarda solamente en el entorno. La firma y verificación están en `src/utils/jwt.js`; bcrypt permanece en `src/utils/hash.js`.

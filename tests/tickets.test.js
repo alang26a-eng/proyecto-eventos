@@ -116,6 +116,16 @@ test('Pre-entrega 3: email inexistente y password incorrecto tienen el mismo err
   assert.equal((await api('/api/sessions/login', 'POST', undefined, {})).status, 400);
 });
 
+test('Pre-entrega 4: Passport acepta cookie en tickets y consulta el rol vigente', async () => {
+  const response = await fetch(base + '/api/tickets/my-tickets', { headers: { Cookie: 'currentUser=' + tokens.ana } });
+  assert.equal(response.status, 200);
+  for (const ticket of (await response.json()).payload) assert.equal(ticket.user, users.ana.id);
+  const e = await event();
+  const forbidden = await fetch(base + '/api/events/' + e.id + '/tickets', { headers: { Cookie: 'currentUser=' + tokens.ana } });
+  assert.equal(forbidden.status, 403);
+  assert.equal((await fetch(base + '/api/tickets/my-tickets', { headers: { Cookie: 'currentUser=manipulado' } })).status, 401);
+});
+
 test('Pre-entrega 3: current rechaza cookie ausente, manipulada, vencida y solo Bearer', async () => {
   const expired = jwt.sign({ id: users.ana.id, email: users.ana.email, role: 'user' }, secret, { expiresIn: -1, issuer: 'eventhub', audience: 'eventhub-api' });
   for (const headers of [{}, { Cookie: 'currentUser=invalid' }, { Cookie: 'currentUser=' + expired }, { Authorization: 'Bearer ' + tokens.ana }]) {

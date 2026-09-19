@@ -1,8 +1,5 @@
-import { registerUser } from '../services/sessions.service.js';
-
-export async function register(req, res) {
-  const user = await registerUser(req.body);
-  res.status(201).json({ status: 'success', payload: user });
+export function register(req, res) {
+  res.status(201).json({ status: 'success', payload: req.user });
 }
 export function getSessionsStatus(req, res) {
   res.status(200).json({

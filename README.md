@@ -1,169 +1,192 @@
-# EventHub — Pre-entrega 2 de Backend II
+# EventHub — Pre-entrega 7
+API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Se extiende la entrega 2 con los componentes necesarios para este flujo.
 
-API REST para una plataforma de eventos e inscripciones. Esta entrega agrega registro seguro de usuarios con MongoDB, conservando health, events y la arquitectura inicial.
+## Tecnologías
+Node.js 22+, Express 5, MongoDB/Mongoose, bcrypt, JSON Web Tokens, Nodemailer y dotenv. JavaScript ESM. Pruebas con Node Test Runner, MongoDB temporal real y servidor SMTP local de pruebas.
 
-## Tecnologías y requisitos
-
-Node.js 22 o superior, npm, Express 5, dotenv, Mongoose, bcrypt y nodemon. JavaScript ESM (import/export). MongoDB local o un clúster de MongoDB Atlas. Las pruebas usan Node Test Runner y mongodb-memory-server con una base temporal independiente.
-
-## Instalación y configuración
-
-Desde la carpeta del proyecto:
-
+## Instalación
 ```powershell
-npm install
+npm ci
 Copy-Item .env.example .env
 ```
-
-Editar `.env` localmente. No compartirlo ni subirlo a GitHub.
+Si ya tenés `.env`, conservarlo y agregar las variables faltantes. Nunca subirlo ni compartir su contenido.
 
 | Variable | Uso |
 | --- | --- |
-| PORT | Puerto HTTP, 8080 por defecto. |
-| NODE_ENV | development para desarrollo. |
-| MONGO_URL | URI privada de MongoDB, obligatoria para iniciar. |
-| JWT_SECRET | Reservada para futuras entregas; todavía no se usa. |
+| PORT | Puerto HTTP; 8080 por defecto. |
+| NODE_ENV | development o production. |
+| MONGO_URL | URI privada de Atlas o MongoDB con replica set. |
+| JWT_SECRET | Secreto aleatorio de al menos 32 caracteres; obligatorio para login. |
+| MAIL_HOST | Servidor SMTP del proveedor. |
+| MAIL_PORT | 587 (STARTTLS) o 465 (TLS); el transporte elige TLS directo en 465. |
+| MAIL_USER | Usuario SMTP. |
+| MAIL_PASS | Contraseña SMTP o contraseña de aplicación del proveedor. |
+| MAIL_FROM | Remitente autorizado por el proveedor, por ejemplo EventHub <correo@dominio.com>. |
 
-Para MongoDB local: `mongodb://127.0.0.1:27017/eventhub`.
+**MongoDB debe soportar transacciones**: Atlas ya usa replica set. Un MongoDB standalone no alcanza para crear/cancelar tickets. La suite de pruebas levanta su propio replica set y no usa Atlas.
 
-Para Atlas: copiar la URI desde la conexión para drivers del clúster y colocarla como MONGO_URL en `.env`, con el usuario y contraseña de BASE DE DATOS y la base `eventhub`. Ejemplo ilustrativo: `mongodb+srv://USUARIO:CLAVE@TU-CLUSTER.mongodb.net/eventhub?retryWrites=true&w=majority`. Reemplazar los marcadores solo en el archivo privado. Los caracteres especiales de la contraseña deben codificarse para una URL. Autorizar la IP de la computadora en Atlas y dar al usuario de base permisos de lectura/escritura sobre eventhub.
+Generar JWT_SECRET y copiar el resultado solo al archivo local `.env`:
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
+```
+Para correo real, completar las cinco variables MAIL con los datos del proveedor. Gmail requiere una contraseña de aplicación cuando está habilitada para la cuenta, no la contraseña común. Un servicio de pruebas puede capturar los mensajes en su propio panel y no entregarlos a una casilla real.
 
 ## Ejecutar
-
 ```powershell
 npm run dev
 ```
-
-O `npm start`. El servidor primero conecta con MongoDB y crea el índice único de email; recién entonces abre el puerto HTTP. Si falla, revisar URI, disponibilidad, usuario y acceso de red. Ctrl+C detiene el servidor.
+O `npm start`. La API abre el puerto después de conectar MongoDB e inicializar índices. Ctrl+C detiene el servidor.
 
 ## Arquitectura
+Ruta → controller → service → repository → DAO → modelo. Validaciones de negocio, permisos sobre recursos y cupos están en services; los controllers solo coordinan HTTP.
 
 ```text
 src/
-  app.js
-  server.js
-  config/
-    env.config.js
-    database.js
-  routes/
-    events.router.js
-    sessions.router.js
-  controllers/
-    events.controller.js
-    sessions.controller.js
-  services/
-    sessions.service.js
-  repositories/
-    users.repository.js
-  dao/
-    users.dao.js
-  models/
-    User.js
-    Event.js
-  middlewares/
-    error.middleware.js
-  utils/
-    hash.js
-    HttpError.js
+  app.js, server.js
+  config/             env.config.js, database.js
+  routes/             sessions.router.js, events.router.js, tickets.router.js
+  controllers/        sessions, auth, events, tickets
+  services/           sessions, auth, events, tickets, mail
+  repositories/       users, auth, events, tickets
+  dao/                users, auth, events, tickets
+  models/             User.js, Event.js, Ticket.js
+  middlewares/        auth.middleware.js, error.middleware.js
+  utils/              hash.js, HttpError.js, objectId.js, token.js
+scripts/
+  set-role.js
 tests/
-  register.test.js
+  register.test.js, tickets.test.js
 ```
 
-Flujo: ruta → controller → service → repository → DAO → modelo Mongoose. El service valida datos, normaliza email, verifica duplicados y llama al helper reutilizable de bcrypt. El repository separa negocio de acceso a datos. El DAO usa Mongoose. El controller define la respuesta HTTP. Express 5 deriva errores asíncronos al middleware de errores.
-
-User tiene first_name, last_name, email, password y role; roles permitidos user, organizer y admin, con user por defecto. Event conserva el modelo base de la primera entrega.
-
-## Rutas
-
-| Método | Ruta | Resultado |
-| --- | --- | --- |
-| GET | /api/health | 200, servidor activo. |
-| GET | /api/events | 200, lista vacía. |
-| GET | /api/sessions | 200, información sobre sesiones. |
-| POST | /api/sessions/register | 201, usuario creado. |
-
-Login, JWT, cookies y autorización quedan para próximas entregas.
-
-## Probar el registro
-
-En Postman usar POST a `http://localhost:8080/api/sessions/register`, seleccionar Body → raw → JSON y enviar:
-
+## Registro, login y roles
+Registro público: POST /api/sessions/register.
 ```json
-{
-  "first_name": "Ana",
-  "last_name": "Pérez",
-  "email": "Ana@Mail.com ",
-  "password": "Secreta123"
-}
+{"first_name":"Ana","last_name":"Pérez","email":"ana@example.com","password":"Secreta123"}
 ```
+Los cuatro campos son obligatorios. Email trim + lowercase y único. Contraseña de 8 caracteres mínimo y hasta 72 bytes UTF-8, protegida con bcrypt. El registro siempre asigna user e ignora role del body. Respuesta 201 sin password; 400 para datos inválidos; 409 para duplicados.
 
-Los cuatro campos son obligatorios y deben ser strings no vacíos. Los nombres se guardan sin espacios exteriores. El email se valida y normaliza con trim + lowercase. La contraseña debe tener al menos 8 caracteres y hasta 72 bytes UTF-8 (límite de bcrypt); se conserva sin trim. El registro ignora role y otros campos adicionales: siempre crea un usuario con rol user.
-
-Respuesta HTTP 201:
-
+Login: POST /api/sessions/login.
 ```json
-{
-  "status": "success",
-  "payload": {
-    "id": "ID_GENERADO_POR_MONGODB",
-    "first_name": "Ana",
-    "last_name": "Pérez",
-    "email": "ana@mail.com",
-    "role": "user"
-  }
-}
+{"email":"ana@example.com","password":"Secreta123"}
 ```
+Respuesta 200: `{"status":"success","payload":{"token":"TOKEN","user":{...}}}`.
+Credenciales incorrectas: 401. Usar en las rutas protegidas:
+```text
+Authorization: Bearer TOKEN
+```
+JWT HS256 con expiración de una hora, emisor y audiencia fijos. El middleware consulta el usuario y su rol actual en MongoDB: no acepta roles enviados en headers/body. No hay un endpoint público para convertirse en admin.
 
-También se puede probar en una segunda terminal PowerShell con el servidor funcionando:
-
+Para preparar una cuenta organizadora de prueba, registrarla primero. Luego, **solo desde una terminal de confianza con acceso a la base**, ejecutar:
 ```powershell
-$body = @{
-  first_name = "Ana"
-  last_name = "Perez"
-  email = "Ana@Mail.com "
-  password = "Secreta123"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/sessions/register" -ContentType "application/json; charset=utf-8" -Body $body
+npm run set-role -- correo-del-organizador@example.com organizer
 ```
+El mismo comando acepta user y admin. Cambia roles en la base configurada en MONGO_URL; no usar cuentas ajenas.
 
-| Caso | HTTP | Resultado esperado |
+## Eventos
+GET /api/events devuelve los eventos published.
+POST /api/events requiere organizer o admin:
+```json
+{
+  "title":"Encuentro Backend",
+  "description":"Práctica de APIs",
+  "date":"2030-12-20T18:00:00.000Z",
+  "endDate":"2030-12-20T21:00:00.000Z",
+  "location":"Auditorio",
+  "capacity":2,
+  "status":"published"
+}
+```
+La fecha debe ser futura; adaptar el ejemplo si es necesario. El organizador es siempre el usuario autenticado, aunque el body intente cambiarlo. Capacidad entera positiva. El modelo soporta draft, published, cancelled y finished; creación acepta draft o published. Para las pruebas manuales de estados, preparar fixtures cambiando status de eventos de prueba desde Atlas. No se implementa en esta entrega un CRUD completo de eventos.
+
+## Rutas de tickets
+| Método | Ruta | Acceso |
 | --- | --- | --- |
-| Registro válido con email nuevo | 201 | Usuario sin password. |
-| Falta un campo o tiene tipo incorrecto | 400 | Faltan campos obligatorios. |
-| Email inválido | 400 | El email tiene un formato inválido. |
-| Contraseña menor a 8 caracteres | 400 | La contraseña debe tener al menos 8 caracteres. |
-| Contraseña mayor a 72 bytes | 400 | La contraseña no puede superar 72 bytes. |
-| Email ya registrado, incluso con mayúsculas o espacios | 409 | El email ya está registrado. |
-| Body con role: admin | 201 | Se registra como user. |
-| JSON malformado | 400 | El cuerpo debe ser un JSON válido. |
+| POST | /api/events/:eid/tickets | Autenticado. |
+| GET | /api/tickets/my-tickets | Autenticado; solo propios. |
+| GET | /api/events/:eid/tickets | Organizador del evento o admin. |
+| PATCH | /api/tickets/:tid/cancel | Dueño del ticket o admin. |
 
-Los errores devuelven `{"status":"error","message":"..."}`. El índice único protege también ante solicitudes simultáneas. Los errores internos no exponen contraseñas, URI ni detalles de MongoDB.
+Inscripción:
+```json
+{"quantity":2}
+```
+Respuesta 201:
+```json
+{
+  "status":"success",
+  "payload":{
+    "_id":"ID_TICKET",
+    "user":"ID_USUARIO",
+    "event":"ID_EVENTO",
+    "status":"confirmed",
+    "quantity":2,
+    "reservationCode":"UUID_GENERADO",
+    "createdAt":"FECHA_ISO",
+    "cancelledAt":null,
+    "emailStatus":"sent"
+  },
+  "notification":"Confirmación aceptada por el servidor de correo"
+}
+```
+Puede incluir metadatos de Mongoose. user y event se guardan como referencias ObjectId, nunca como objetos embebidos. Código de reserva UUID con índice único.
 
-## Verificar persistencia y adjuntar evidencia
+### Estados y cupos
+- confirmed: inscripción confirmada, ocupa quantity cupos.
+- pending: reserva pendiente, también ocupa quantity cupos. Se soporta en el modelo; el endpoint público crea confirmed.
+- cancelled: no ocupa cupos; conserva el documento y cancelledAt.
 
-Luego del registro en Atlas, abrir la colección `eventhub.users` y buscar `{ "email": "ana@mail.com" }`. Deben aparecer el usuario, role user y un password con hash bcrypt que empieza con `$2b$12$`, nunca Secreta123. La respuesta HTTP no contiene password, ni siquiera hasheada.
+Se permite **una sola inscripción activa por usuario/evento**. Al cancelar se permite una inscripción nueva con otro código. El índice único parcial refuerza esta regla.
 
-Adjuntar una captura de la respuesta 201 y otra del documento en MongoDB usando un usuario de prueba. No incluir la URI privada ni credenciales en las capturas.
+Cupos disponibles = capacity menos la suma de quantity de tickets confirmed/pending. Se valida que el evento exista, esté published y que su endDate (o date cuando no hay endDate) sea futura. quantity debe ser un número entero seguro mayor que cero, no un string.
 
-## Pruebas automáticas
+Crear y cancelar tickets usan transacciones. Primero se incrementa bookingVersion del evento dentro de la transacción: solicitudes concurrentes que comparten evento generan conflicto y reintento con una nueva vista de los cupos. Luego se calcula la suma y se inserta/cancela el ticket. No hay contador de cupos duplicado que pueda quedar desactualizado.
 
+Cancelación cambia status y cancelledAt, sin borrar el documento. Cancelar dos veces devuelve 409. Los cupos quedan libres por excluir cancelled del cálculo.
+
+Mis tickets incluye event mediante populate limitado a title, date y location. La consulta de organizadores devuelve referencias a usuarios sin contraseñas ni correos de otros usuarios.
+
+### Email
+Después de confirmar la transacción, Nodemailer envía el mensaje a la dirección del usuario autenticado con evento, fecha, ubicación, cantidad y código. El destinatario no puede elegirse desde el body.
+
+emailStatus es independiente del estado del ticket:
+- sent: el servidor SMTP aceptó el mensaje; comprobar recepción en bandeja de entrada/spam.
+- failed: el envío falló o SMTP no está configurado. La reserva sigue confirmed; la respuesta lo informa.
+- pending: todavía no se pudo registrar/verificar el resultado.
+
+El correo se envía fuera de la transacción para evitar envíos repetidos por reintentos de MongoDB. No se implementa una cola automática de reenvío: si falla, conservar el código y corregir SMTP; no repetir la inscripción para intentar recuperar el correo. Un cierre abrupto después del commit puede dejar emailStatus pending.
+
+### Errores
+Todos usan `{"status":"error","message":"..."}`.
+400: quantity/identificadores/datos inválidos.
+401: sesión ausente, inválida o vencida.
+403: ticket ajeno, rol insuficiente u organizador de otro evento.
+404: evento/ticket inexistente.
+409: evento no disponible, sin cupo, duplicado activo o ticket ya cancelado.
+500: error interno sin credenciales ni detalles privados.
+
+## Flujo manual en Postman
+1. Configurar Atlas, JWT_SECRET y SMTP; iniciar el servidor.
+2. Registrar dos usuarios con direcciones de prueba propias y un organizador.
+3. Asignar organizer con el comando local y hacer login; guardar el token.
+4. Crear un evento publicado de capacidad 2 con el token del organizador; guardar _id.
+5. Hacer login con el usuario y crear un ticket quantity 2; verificar 201 y email recibido.
+6. Repetir inscripción con el mismo usuario: 409. Probar otro usuario sin cupos: 409.
+7. Sin Authorization: 401. Evento inexistente: 404. Evento cancelled/finished o pasado: 409.
+8. Cancelar como otro user: 403. Cancelar como dueño: 200 y cancelledAt.
+9. Crear inscripción nuevamente por los cupos liberados: 201.
+10. Consultar inscripciones del evento como user: 403; organizador ajeno: 403; dueño/admin: 200.
+11. Consultar my-tickets: solo propios con title, date y location.
+12. Capturar respuesta del ticket, ticket guardado en Atlas y correo recibido, sin tokens ni credenciales.
+
+## Pruebas automatizadas
 ```powershell
 npm test
 ```
+La suite usa una base temporal con replica set para transacciones y un servidor SMTP en localhost que realmente recibe el mensaje enviado por Nodemailer. Nunca usa Atlas ni envía a personas reales. La primera ejecución requiere internet para descargar MongoDB.
 
-Las pruebas levantan un proceso real de MongoDB temporal con mongodb-memory-server, prueban HTTP y revisan los documentos guardados. No usan MONGO_URL, no conectan a Atlas ni tocan usuarios reales. La primera ejecución descarga el binario de MongoDB y requiere acceso a internet. La base temporal se elimina al finalizar.
+Incluye los diez casos exigidos, comprobación de email SMTP, manipulación de roles/propietario, cantidad inválida, referencias, populate, cupos concurrentes, duplicado concurrente, pending, fallo SMTP y regresión del registro seguro. La recepción en una casilla externa debe verificarse aparte con el proveedor configurado.
 
-Cubren registro, normalización, bcrypt y comparación, exclusión de password, rol forzado, campos faltantes/tipos, email inválido, longitud de contraseña, duplicados (incluidos simultáneos), JSON inválido y rutas de la entrega anterior.
+## Entrega y credenciales
+Subir package.json, package-lock.json, .env.example, .gitignore, README, src, scripts y tests. No subir .env, node_modules, tokens ni credenciales. La captura docs/registro-mongodb.png corresponde a la entrega 2; adjuntar nuevas capturas del flujo de tickets y correo para esta entrega.
 
-## Entrega
-
-Subir el código, package.json, package-lock.json, README.md y .env.example al repositorio público. .gitignore excluye .env, node_modules y archivos de log. No subir credenciales. Los .gitkeep conservan la estructura de carpetas de la primera entrega.
-
-Referencias técnicas: [Mongoose: índices únicos y validación](https://mongoosejs.com/docs/validation.html#the-unique-option-is-not-a-validator) y [bcrypt: límite de 72 bytes](https://github.com/kelektiv/node.bcrypt.js#security-issues-and-concerns).
-
-
-## Evidencia del registro en Atlas
-
-![Usuario de prueba persistido con email normalizado, rol user y hash bcrypt](docs/registro-mongodb.png)
-
+Referencias: [transacciones de Mongoose](https://mongoosejs.com/docs/transactions.html), [índices parciales de MongoDB](https://www.mongodb.com/docs/manual/core/index-partial/), [SMTP de Nodemailer](https://nodemailer.com/smtp).

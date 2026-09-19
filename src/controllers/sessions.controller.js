@@ -7,7 +7,6 @@ export async function register(req, res) {
 export function getSessionsStatus(req, res) {
   res.status(200).json({
     status: 'ok',
-    message: 'Registro disponible en POST /api/sessions/register. Login pendiente.',
+    message: 'Registro disponible en POST /api/sessions/register. Login disponible en POST /api/sessions/login.',
   });
 }
-

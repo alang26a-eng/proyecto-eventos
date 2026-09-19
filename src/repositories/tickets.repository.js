@@ -1,0 +1,10 @@
+import * as dao from '../dao/tickets.dao.js';
+export const transaction = operation => dao.transaction(operation);
+export const findById = (id, session) => dao.findById(id, session);
+export const findActive = (user, event, session) => dao.findActive(user, event, session);
+export const occupied = (event, session) => dao.occupied(event, session);
+export const create = (data, session) => dao.create(data, session);
+export const cancel = (id, session) => dao.cancel(id, session);
+export const listOwn = user => dao.listOwn(user);
+export const listForEvent = event => dao.listForEvent(event);
+export const setEmailStatus = (id, status) => dao.setEmailStatus(id, status);

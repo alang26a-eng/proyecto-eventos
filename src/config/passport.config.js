@@ -90,20 +90,20 @@ passport.use('access', strategy(async req => {
   const header = req.get('authorization') || '';
   const match = /^Bearer ([^\s]+)$/i.exec(header);
   const token = match?.[1] || (!header && cookie.parse(req.headers.cookie || '').currentUser);
-  if (!token) throw new HttpError(401, 'Debés iniciar sesión');
+  if (!token) throw new HttpError(401, 'No autenticado');
   let payload;
   try {
     payload = verifyToken(token);
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    throw new HttpError(401, 'Sesión inválida o vencida');
+    throw new HttpError(401, 'No autenticado');
   }
   if (typeof payload.sub !== 'string' || !/^[a-f\d]{24}$/i.test(payload.sub)) {
-    throw new HttpError(401, 'Sesión inválida');
+    throw new HttpError(401, 'No autenticado');
   }
   // Rol actual de la base: no se confía en roles del token, body ni headers.
   const user = await findIdentity(payload.sub);
-  if (!user) throw new HttpError(401, 'Sesión inválida');
+  if (!user) throw new HttpError(401, 'No autenticado');
   return user;
 
 }));

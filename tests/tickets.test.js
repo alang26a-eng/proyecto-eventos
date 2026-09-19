@@ -78,6 +78,67 @@ function event(overrides = {}) {
 const enroll = (e, key = 'ana', quantity = 1, extras = {}) =>
   api('/api/events/' + e._id + '/tickets', 'POST', tokens[key], { quantity, ...extras });
 
+async function cookieApi(path, method = 'GET', key, body) {
+  const response = await fetch(base + path, { method,
+    headers: { 'Content-Type': 'application/json', ...(key ? { Cookie: 'currentUser=' + tokens[key] } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  return { status: response.status, body: await response.json() };
+}
+
+test('Pre-entrega 5: crear con cookie user 403; organizer/admin 201; sin sesión 401', async () => {
+  const data = { title: 'Roles', location: 'Sala', date: new Date(Date.now() + 86400000).toISOString(), capacity: 2, status: 'published' };
+  const forbidden = await cookieApi('/api/events', 'POST', 'ana', data);
+  assert.equal(forbidden.status, 403);
+  assert.equal(forbidden.body.message, 'No tenés permisos para realizar esta acción');
+  for (const key of ['organizer', 'admin']) assert.equal((await cookieApi('/api/events', 'POST', key, data)).status, 201);
+  const absent = await cookieApi('/api/events', 'POST', undefined, data);
+  assert.deepEqual(absent, { status: 401, body: { status: 'error', message: 'No autenticado' } });
+});
+
+test('Pre-entrega 5: usuarios solo admin, paginados, sin password ni hashes', async () => {
+  for (const key of ['ana', 'organizer']) assert.equal((await cookieApi('/api/users', 'GET', key)).status, 403);
+  assert.equal((await cookieApi('/api/users')).status, 401);
+  const result = await cookieApi('/api/users?limit=2', 'GET', 'admin');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.payload.length, 2);
+  assert.ok(result.body.pagination.total >= 5);
+  for (const user of result.body.payload) assert.deepEqual(Object.keys(user).sort(), ['_id','first_name','last_name','email','role'].sort());
+  assert.equal((await cookieApi('/api/users?limit=101', 'GET', 'admin')).status, 400);
+});
+
+test('Pre-entrega 5: editar propio, rechazar ajeno/user y permitir admin', async () => {
+  const e = await event();
+  const path = '/api/events/' + e.id;
+  assert.equal((await cookieApi(path, 'PATCH', 'organizer', { title: 'Editado' })).status, 200);
+  assert.equal((await cookieApi(path, 'PATCH', 'other', { title: 'Ajeno' })).status, 403);
+  assert.equal((await cookieApi(path, 'PATCH', 'ana', { title: 'User' })).status, 403);
+  assert.equal((await cookieApi(path, 'PATCH', undefined, { title: 'Sin sesión' })).status, 401);
+  assert.equal((await cookieApi(path, 'PATCH', 'admin', { title: 'Admin' })).status, 200);
+  assert.equal((await cookieApi(path, 'PATCH', 'organizer', { organizer: users.other.id })).status, 400);
+  assert.equal((await cookieApi(path, 'PATCH', 'organizer', { capacity: 1 })).status, 400);
+  assert.equal((await cookieApi('/api/events/' + new mongoose.Types.ObjectId(), 'PATCH', 'admin', { title: 'Nada' })).status, 404);
+  const stored = await Event.findById(e.id);
+  assert.equal(stored.title, 'Admin');
+  assert.equal(stored.organizer.toString(), users.organizer.id);
+});
+
+test('Pre-entrega 5: cancelar requiere propietario/admin y bloquea nuevas reservas', async () => {
+  const e = await event();
+  const registration = await enroll(e);
+  const path = '/api/events/' + e.id + '/cancel';
+  assert.equal((await cookieApi(path, 'PATCH', 'other')).status, 403);
+  assert.equal((await cookieApi(path, 'PATCH', 'ana')).status, 403);
+  assert.equal((await cookieApi(path, 'PATCH')).status, 401);
+  const cancelled = await cookieApi(path, 'PATCH', 'organizer');
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.payload.status, 'cancelled');
+  assert.equal((await enroll(e, 'bob')).status, 409);
+  assert.ok(await Ticket.findById(registration.body.payload._id));
+  assert.equal((await cookieApi(path, 'PATCH', 'admin')).status, 409);
+  const another = await event();
+  assert.equal((await cookieApi('/api/events/' + another.id + '/cancel', 'PATCH', 'admin')).status, 200);
+});
+
 test('Pre-entrega 3: registro, cookie HttpOnly, current, logout y 401', async () => {
   const credentials = { email: 'cookie@example.test', password: 'CookiePrueba123' };
   assert.equal((await api('/api/sessions/register', 'POST', undefined, { ...credentials, first_name: 'Cookie', last_name: 'Test' })).status, 201);

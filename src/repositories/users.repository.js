@@ -7,3 +7,4 @@ export function createUser(data) {
   return usersDao.createUser(data);
 }
 
+export { listPublic, countUsers } from '../dao/users.dao.js';

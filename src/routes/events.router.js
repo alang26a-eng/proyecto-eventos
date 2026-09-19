@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import { getEvents, createEvent } from '../controllers/events.controller.js';
+import { getEvents, createEvent, updateEvent, cancelEvent } from '../controllers/events.controller.js';
 import * as tickets from '../controllers/tickets.controller.js';
 import { authenticate } from '../middlewares/auth.middleware.js';
+import { authorize } from '../middlewares/authorize.middleware.js';
 const router = Router();
 router.get('/', getEvents);
-router.post('/', authenticate, createEvent);
+router.post('/', authenticate, authorize('organizer', 'admin'), createEvent);
+router.patch('/:eid', authenticate, authorize('organizer', 'admin'), updateEvent);
+router.patch('/:eid/cancel', authenticate, authorize('organizer', 'admin'), cancelEvent);
 router.post('/:eid/tickets', authenticate, tickets.create);
-router.get('/:eid/tickets', authenticate, tickets.listForEvent);
+router.get('/:eid/tickets', authenticate, authorize('organizer', 'admin'), tickets.listForEvent);
 export default router;

@@ -1,4 +1,4 @@
-# EventHub — Pre-entregas 3, 4 y 7
+# EventHub — Pre-entregas 3, 4, 5 y 7
 API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Se extiende la entrega 2 con los componentes necesarios para este flujo.
 
 ## Tecnologías
@@ -59,6 +59,42 @@ tests/
 ```
 
 ## Registro, login y roles
+### Pre-entrega 5: roles y autorización
+
+User.role admite user, organizer y admin, con user por defecto. El registro público ignora el rol recibido y siempre crea user. La asignación de roles sigue siendo una operación administrativa local mediante `npm run set-role`.
+
+| Acción | user | organizer | admin |
+| --- | --- | --- | --- |
+| Consultar eventos publicados | Sí | Sí | Sí |
+| Crear eventos | No | Sí | Sí |
+| Modificar/cancelar eventos propios | No | Sí | Sí |
+| Modificar/cancelar cualquier evento | No | No | Sí |
+| Ver todos los usuarios | No | No | Sí |
+
+`auth.middleware.js` autentica mediante Passport y recupera de MongoDB el rol actual para rutas de recursos. `authorize.middleware.js` exporta `authorize(...roles)` y compara req.user.role; las rutas solo declaran los permisos. Los services comprueban la propiedad del recurso y mantienen las validaciones de negocio.
+
+**401** significa que no hay sesión válida: `{"status":"error","message":"No autenticado"}`. **403** significa que hay sesión pero faltan permisos: `{"status":"error","message":"No tenés permisos para realizar esta acción"}`. Si un organizador intenta actuar sobre un evento ajeno recibe 403 con el mensaje de propiedad. No se usa 500 para estos casos.
+
+| Método | Ruta | Permiso | Request / respuesta |
+| --- | --- | --- | --- |
+| GET | /api/sessions/current | Cookie válida | 200 con id/email/role; 401 sin cookie |
+| POST | /api/events | organizer/admin | Ejemplo de creación debajo; 201 con evento |
+| PATCH | /api/events/:eid | organizer propietario/admin | `{"title":"Nuevo título","location":"Sala B"}` → 200 con evento actualizado |
+| PATCH | /api/events/:eid/cancel | organizer propietario/admin | Sin body → 200 con evento status=cancelled |
+| GET | /api/users?page=1&limit=20 | admin | 200 con payload de usuarios y pagination `{page,limit,total}` |
+| GET | /api/events/:eid/tickets | organizer propietario/admin | 200 con tickets del evento |
+| GET | /api/tickets/my-tickets | Autenticado | 200, solo propios |
+| POST | /api/events/:eid/tickets | Autenticado | 201 si cumple cupos y demás reglas |
+| PATCH | /api/tickets/:tid/cancel | Dueño/admin | 200 con ticket cancelado |
+
+Las pruebas de permisos usan cookies. Para conservar los clientes anteriores, las rutas de recursos también aceptan Bearer; por tanto, sin cookie **y sin Bearer válido** responden 401. /current sigue exigiendo cookie. Logout conserva su comportamiento público e idempotente.
+
+La edición inicial admite únicamente title, description y location. Rechaza cambios de organizer, capacity, fechas o status; la cancelación tiene su ruta específica. La cancelación y las reservas comparten una escritura transaccional del evento: una vez cancelado, no se aceptan nuevas reservas. Los tickets existentes se conservan; no se implementan reembolsos ni cancelación automática de tickets.
+
+GET /api/users usa proyección explícita: _id, first_name, last_name, email y role. Nunca devuelve password ni hashes. Permite consultar todos los usuarios por páginas, con límite máximo de 100. La lista de eventos publicados continúa siendo pública.
+
+No se agregan variables de entorno ni dependencias. Las pruebas incluyen los seis casos de la consigna, permisos de propietario y admin, paginación y privacidad, más regresión de autenticación y tickets.
+
 ### Pre-entrega 4: autenticación centralizada con Passport
 
 `src/config/passport.config.js` registra las estrategias de Passport mediante `passport-custom`. Se eligieron callbacks con acceso al request para conservar exactamente las validaciones, códigos HTTP y respuestas JSON existentes, incluso ante campos ausentes o de tipos incorrectos. `app.js` únicamente importa la configuración y ejecuta `passport.initialize()`. No se usan sesiones de servidor: todos los middleware declaran `session: false`.

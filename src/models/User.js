@@ -1,11 +1,14 @@
-// Modelo base en memoria. La persistencia se incorporará en próximas entregas.
-export default class User {
-  constructor({ id = null, firstName = '', lastName = '', email = '', passwordHash = '', role = 'user' } = {}) {
-    this.id = id;
-    this.firstName = firstName;
-    this.lastName = lastName;
-    this.email = email;
-    this.passwordHash = passwordHash;
-    this.role = role;
-  }
-}
+import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema({
+  first_name: { type: String, required: true, trim: true },
+  last_name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+  password: { type: String, required: true, select: false },
+  role: { type: String, enum: ['user', 'organizer', 'admin'], default: 'user' },
+}, {
+  timestamps: true,
+  toJSON: { transform: (_doc, result) => { delete result.password; return result; } },
+});
+export default mongoose.model('User', userSchema);
+

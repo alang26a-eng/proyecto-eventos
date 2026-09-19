@@ -1,19 +1,23 @@
 {
   "name": "eventhub",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Pre-entrega 1 de Backend II: API REST para una plataforma de eventos",
+  "description": "Pre-entrega 2 de Backend II: registro seguro con MongoDB y bcrypt",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "dotenv": "^18.0.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mongoose": "^9.10.1"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.14"
   }
 }

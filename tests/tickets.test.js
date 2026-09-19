@@ -78,6 +78,68 @@ function event(overrides = {}) {
 const enroll = (e, key = 'ana', quantity = 1, extras = {}) =>
   api('/api/events/' + e._id + '/tickets', 'POST', tokens[key], { quantity, ...extras });
 
+test('Pre-entrega 3: registro, cookie HttpOnly, current, logout y 401', async () => {
+  const credentials = { email: 'cookie@example.test', password: 'CookiePrueba123' };
+  assert.equal((await api('/api/sessions/register', 'POST', undefined, { ...credentials, first_name: 'Cookie', last_name: 'Test' })).status, 201);
+  const response = await fetch(base + '/api/sessions/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials) });
+  assert.equal(response.status, 200);
+  const setCookie = response.headers.get('set-cookie');
+  assert.match(setCookie, /currentUser=/);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Lax/i);
+  assert.match(setCookie, /Max-Age=3600/);
+  const { config } = await import('../src/config/env.config.js');
+  assert.equal(/; Secure/i.test(setCookie), config.nodeEnv === 'production');
+  const body = await response.json();
+  const payload = jwt.verify(body.payload.token, secret);
+  assert.equal(payload.email, credentials.email);
+  assert.equal(payload.role, 'user');
+  assert.equal(payload.id, body.payload.user.id);
+  assert.equal(payload.password, undefined);
+  const cookieHeader = setCookie.split(';')[0];
+  const current = await fetch(base + '/api/sessions/current', { headers: { Cookie: cookieHeader } });
+  assert.equal(current.status, 200);
+  assert.deepEqual((await current.json()).payload, { id: payload.id, email: credentials.email, role: 'user' });
+  const logout = await fetch(base + '/api/sessions/logout', { method: 'POST', headers: { Cookie: cookieHeader } });
+  assert.equal(logout.status, 200);
+  assert.match(logout.headers.get('set-cookie'), /currentUser=;/);
+  assert.match(logout.headers.get('set-cookie'), /Expires=Thu, 01 Jan 1970/i);
+  assert.equal((await fetch(base + '/api/sessions/current')).status, 401);
+});
+
+test('Pre-entrega 3: email inexistente y password incorrecto tienen el mismo error', async () => {
+  for (const credentials of [{ email: 'missing@example.test', password: 'Password123' }, { email: users.ana.email, password: 'incorrecta' }]) {
+    const response = await api('/api/sessions/login', 'POST', undefined, credentials);
+    assert.equal(response.status, 401);
+    assert.deepEqual(response.body, { status: 'error', message: 'Credenciales inválidas' });
+  }
+  assert.equal((await api('/api/sessions/login', 'POST', undefined, {})).status, 400);
+});
+
+test('Pre-entrega 3: current rechaza cookie ausente, manipulada, vencida y solo Bearer', async () => {
+  const expired = jwt.sign({ id: users.ana.id, email: users.ana.email, role: 'user' }, secret, { expiresIn: -1, issuer: 'eventhub', audience: 'eventhub-api' });
+  for (const headers of [{}, { Cookie: 'currentUser=invalid' }, { Cookie: 'currentUser=' + expired }, { Authorization: 'Bearer ' + tokens.ana }]) {
+    const response = await fetch(base + '/api/sessions/current', { headers });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { status: 'error', message: 'No autenticado' });
+  }
+});
+
+test('Pre-entrega 3: expiración configurable y cookie Secure solo en producción', async () => {
+  const { config } = await import('../src/config/env.config.js');
+  const previous = { jwtExpiresIn: config.jwtExpiresIn, nodeEnv: config.nodeEnv };
+  try {
+    config.jwtExpiresIn = '2h';
+    for (const nodeEnv of ['development', 'production']) {
+      config.nodeEnv = nodeEnv;
+      const response = await fetch(base + '/api/sessions/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: users.ana.email, password: 'PruebaSegura123' }) });
+      assert.equal(/; Secure/i.test(response.headers.get('set-cookie')), nodeEnv === 'production');
+      const payload = jwt.verify((await response.json()).payload.token, secret);
+      assert.equal(payload.exp - payload.iat, 7200);
+    }
+  } finally { Object.assign(config, previous); }
+});
+
 test('Inscripción 201 persiste referencias, código único y confirmación SMTP real', async () => {
   const e = await event();
   const beforeMessages = messages.length;

@@ -1,6 +1,6 @@
 import * as authRepository from '../repositories/auth.repository.js';
 import { comparePassword } from '../utils/hash.js';
-import { signToken } from '../utils/token.js';
+import { signToken } from '../utils/jwt.js';
 import HttpError from '../utils/HttpError.js';
 
 export async function login(body) {
@@ -12,7 +12,7 @@ export async function login(body) {
   if (!user || !(await comparePassword(password, user.password))) {
     throw new HttpError(401, 'Credenciales inválidas');
   }
-  return { token: signToken(user._id), user: {
+  return { token: signToken(user), user: {
     id: user._id.toString(), first_name: user.first_name, last_name: user.last_name,
     email: user.email, role: user.role,
   } };

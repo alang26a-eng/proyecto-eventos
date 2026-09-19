@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { getSessionsStatus, register } from '../controllers/sessions.controller.js';
-import { loginUser } from '../controllers/auth.controller.js';
+import { loginUser, currentUser, logoutUser } from '../controllers/auth.controller.js';
+import { authenticateCookie } from '../middlewares/auth.middleware.js';
 const router = Router();
 router.get('/', getSessionsStatus);
 router.post('/register', register);
 router.post('/login', loginUser);
+router.get('/current', authenticateCookie, currentUser);
+router.post('/logout', logoutUser);
 export default router;

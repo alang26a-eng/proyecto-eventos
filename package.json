@@ -1,0 +1,19 @@
+{
+  "name": "eventhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pre-entrega 1 de Backend II: API REST para una plataforma de eventos",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

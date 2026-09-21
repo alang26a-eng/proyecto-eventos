@@ -78,6 +78,57 @@ function event(overrides = {}) {
 const enroll = (e, key = 'ana', quantity = 1, extras = {}) =>
   api('/api/events/' + e._id + '/tickets', 'POST', tokens[key], { quantity, ...extras });
 
+test('Entrega final: los diez pasos integrados con cookies, roles, SMTP, cupos y DTO', async () => {
+  const credentials = { email: 'entrega-final@example.test', password: 'FinalPrueba123' };
+  const registration = await api('/api/sessions/register', 'POST', undefined, { ...credentials, first_name: 'Final', last_name: 'Test' });
+  assert.equal(registration.status, 201);
+  const login = await api('/api/sessions/login', 'POST', undefined, credentials);
+  assert.equal(login.status, 200);
+  const token = login.body.payload.token;
+  const request = async (path, method = 'GET', bearer = token, body) => {
+    const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', ...(bearer ? { Cookie: 'currentUser=' + bearer } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: response.status, body: await response.json(), cookie: response.headers.get('set-cookie') };
+  };
+  assert.equal((await request('/api/sessions/current')).status, 200);
+  const logout = await request('/api/sessions/logout', 'POST');
+  assert.equal(logout.status, 200);
+  assert.match(logout.cookie, /currentUser=;/);
+  assert.equal((await request('/api/sessions/current', 'GET', null)).status, 401);
+  // Login nuevo después del logout; el token anterior no se usa para nuevas operaciones.
+  const loggedAgain = await api('/api/sessions/login', 'POST', undefined, credentials);
+  const session = loggedAgain.body.payload.token;
+  const data = eventBody({ status: 'published', capacity: 1 });
+  assert.equal((await request('/api/events', 'POST', session, data)).status, 403);
+  const created = await request('/api/events', 'POST', tokens.organizer, data);
+  assert.equal(created.status, 201);
+  const path = '/api/events/' + created.body.payload._id;
+  const beforeMail = messages.length;
+  const booked = await request(path + '/tickets', 'POST', session, { quantity: 1 });
+  assert.equal(booked.status, 201);
+  assert.equal(booked.body.payload.emailStatus, 'sent');
+  assert.equal(messages.length, beforeMail + 1);
+  assert.deepEqual(messages.at(-1).recipients, [credentials.email]);
+  assert.ok(messages.at(-1).raw.includes(booked.body.payload.reservationCode));
+  const duplicate = await request(path + '/tickets', 'POST', session, { quantity: 1 });
+  assert.equal(duplicate.status, 409);
+  assert.match(duplicate.body.message, /activa/);
+  const full = await request(path + '/tickets', 'POST', tokens.bob, { quantity: 1 });
+  assert.equal(full.status, 409);
+  assert.match(full.body.message, /cupos/);
+  const cancelled = await request('/api/tickets/' + booked.body.payload._id + '/cancel', 'PATCH', session);
+  assert.equal(cancelled.status, 200);
+  assert.equal((await request(path + '/tickets', 'POST', session, { quantity: 1 })).status, 201);
+  assert.equal((await request(path, 'PUT', tokens.other, eventBody())).status, 403);
+  const edited = await request(path, 'PUT', tokens.admin, eventBody());
+  assert.equal(edited.status, 200);
+  for (const result of [registration, login, created, booked, cancelled, edited]) assert.equal(JSON.stringify(result.body).includes('password'), false);
+  const listing = await request('/api/events?status=published&page=2&limit=5', 'GET', null);
+  assert.equal(listing.status, 200);
+  assert.deepEqual(Object.keys(listing.body).sort(), ['status','data','page','limit','total','totalPages'].sort());
+  assert.equal(listing.body.page, 2);
+  assert.equal(listing.body.limit, 5);
+});
+
 test('M8: registro-login-evento-inscripción-mis tickets-cancelación con DTO', async () => {
   const credentials = { email: 'flujo-m8@example.test', password: 'PruebaM8Segura123' };
   const registration = await api('/api/sessions/register', 'POST', undefined, { ...credentials, first_name: 'Flujo', last_name: 'M8', role: 'admin' });
@@ -163,7 +214,7 @@ test('Pre-entrega 6: filtros combinados, segunda página, orden y totales', asyn
   const query = '/api/events?status=published&category=workshop&page=2&limit=5&location=' + encodeURIComponent(location) + '&sort=date';
   const result = await cookieApi(query);
   assert.equal(result.status, 200);
-  assert.deepEqual({ ...result.body, data: [] }, { data: [], page: 2, limit: 5, total: 12, totalPages: 3 });
+  assert.deepEqual({ ...result.body, data: [] }, { status: 'success', data: [], page: 2, limit: 5, total: 12, totalPages: 3 });
   assert.deepEqual(result.body.data.map(e => e.price), [5, 6, 7, 8, 9]);
   const range = await cookieApi(query + '&dateFrom=' + encodeURIComponent(new Date(start + 2 * 86400000).toISOString()) + '&dateTo=' + encodeURIComponent(new Date(start + 6 * 86400000).toISOString()));
   assert.equal(range.body.total, 5);

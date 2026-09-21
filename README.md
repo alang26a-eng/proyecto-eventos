@@ -1,6 +1,16 @@
-# EventHub — Pre-entregas 3 a 8
-API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Se extiende la entrega 2 con los componentes necesarios para este flujo.
+# EventHub — Entrega final de Backend II
+API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Evolución del mismo repositorio de las pre-entregas, con autenticación, autorización, eventos paginados e inscripciones integradas.
 
+
+## Cómo evaluar esta entrega
+
+- [Guía paso a paso: instalación, cuentas, roles y flujo completo](docs/guia-evaluacion-final.md).
+- [Matriz de requisitos y pruebas](docs/matriz-entrega-final.md).
+- [Colección de Postman sin credenciales](docs/EventHub-final.postman_collection.json).
+
+Ejecutar `npm ci`, `npm test` y `npm audit`. La suite contiene 50 pruebas, incluida una que recorre los diez pasos finales con cookies, SMTP local, permisos, reservas y cancelación. No usa credenciales reales. Para iniciar la API, configurar .env como se explica debajo y ejecutar `npm run dev` o `npm start`. No se requiere un frontend.
+
+La recepción real de confirmaciones requiere configurar SMTP y revisar la casilla. El repositorio no incluye usuarios privilegiados precreados ni contraseñas: se registran cuentas y se asignan roles mediante `npm run set-role`, explicado en la guía.
 ## Tecnologías
 Node.js 22+, Express 5, MongoDB/Mongoose, bcrypt, Passport, passport-custom, JSON Web Tokens, Nodemailer y dotenv. JavaScript ESM. Pruebas con Node Test Runner, MongoDB temporal real y servidor SMTP local de pruebas.
 
@@ -155,7 +165,7 @@ Logout elimina la cookie con los mismos atributos. Un navegador que procese esa 
 | POST /api/sessions/logout | Sin body | 200 `{"status":"success","message":"Sesión cerrada"}` y eliminación de cookie |
 | GET /api/health | Sin body | 200 `{"status":"ok","message":"Servidor activo"}` |
 | GET /api/sessions | Sin body; estado del recurso | 200, mensaje de estado del recurso sessions |
-| GET /api/events | Sin body; listado paginado | 200 `{"data":[],"page":1,"limit":20,"total":0,"totalPages":0}` si no existen eventos |
+| GET /api/events | Sin body; listado paginado | 200 `{"status":"success","data":[],"page":1,"limit":20,"total":0,"totalPages":0}` si no existen eventos |
 | POST /api/events | Organizador/admin; ejemplo completo debajo | 201 `{"status":"success","payload":{"_id":"EVENTO","title":"Encuentro Backend","status":"published"}}` (extracto) |
 | POST /api/events/:eid/tickets | Autenticado, `{"quantity":1}` | 201 `{"status":"success","payload":{"status":"confirmed","reservationCode":"UUID"},"notification":"Confirmación aceptada por el servidor de correo"}` (extracto) |
 | GET /api/tickets/my-tickets | Autenticado; sin body | 200 `{"status":"success","payload":[]}` si no tiene tickets |
@@ -231,7 +241,7 @@ Ejemplo: `GET /api/events?status=published&category=workshop&page=2&limit=5&sort
 - page: entero positivo, 1 por defecto. limit: entero de 1 a 100, 20 por defecto.
 - sort: date, price, title o capacity. Un prefijo `-` invierte el orden (ej. -date). Se usa _id como desempate estable.
 
-Respuesta vacía: `{"data":[],"page":1,"limit":20,"total":0,"totalPages":0}`. total cuenta solo los eventos que cumplen todos los filtros; una página fuera del rango devuelve data vacío conservando los totales. Filtros desconocidos, fechas no interpretables, rango invertido o paginación inválida responden 400.
+Respuesta vacía: `{"status":"success","data":[],"page":1,"limit":20,"total":0,"totalPages":0}`. total cuenta solo los eventos que cumplen todos los filtros; una página fuera del rango devuelve data vacío conservando los totales. Filtros desconocidos, fechas no interpretables, rango invertido o paginación inválida responden 400.
 
 Los endpoints GET son públicos como exige la consigna: puede consultarse un evento por ID o un estado explícito, incluidos borradores. No se incluyen password, email del organizador ni objetos de usuario; organizer es una referencia.
 

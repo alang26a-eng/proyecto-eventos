@@ -1,0 +1,1308 @@
+{
+  "info": {
+    "name": "EventHub - Entrega final",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Primero leer docs/guia-evaluacion-final.md. Completar variables localmente. Ejecutar carpeta 1, asignar roles por CLI y recién después carpeta 2. No exportar claves ni tokens. Cada recorrido crea eventos y envía correos reales si SMTP está configurado."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "userEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "organizerEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_user",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_organizer",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ticketId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.variables.set(\"futureDate\", new Date(Date.now() + 7 * 86400000).toISOString());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - Registrar cuentas (después asignar roles por CLI)",
+      "item": [
+        {
+          "name": "Registrar user",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/register",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"first_name\":\"user\",\"last_name\":\"Evaluacion\",\"email\":\"{{userEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201,409]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.test(\"Rol público user\", () => pm.expect(result.payload.role).to.eql(\"user\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar organizer",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/register",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"first_name\":\"organizer\",\"last_name\":\"Evaluacion\",\"email\":\"{{organizerEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201,409]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.test(\"Rol público user\", () => pm.expect(result.payload.role).to.eql(\"user\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar admin",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/register",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"first_name\":\"admin\",\"last_name\":\"Evaluacion\",\"email\":\"{{adminEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201,409]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.test(\"Rol público user\", () => pm.expect(result.payload.role).to.eql(\"user\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - Flujo final (roles ya asignados)",
+      "item": [
+        {
+          "name": "Login user",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/login",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"email\":\"{{userEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_user\", result.payload.token);",
+                  "pm.test(\"Cookie HttpOnly\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"HttpOnly\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user 200",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/current",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "pm.test(\"DTO current\", () => pm.expect(Object.keys(result.payload).sort()).to.eql([\"email\",\"id\",\"role\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout user",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/logout",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "pm.collectionVariables.set(\"token_user\", \"\");",
+                  "pm.test(\"Cookie eliminada\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"currentUser=;\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current sin cookie 401",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions/current",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login user",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/login",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"email\":\"{{userEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_user\", result.payload.token);",
+                  "pm.test(\"Cookie HttpOnly\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"HttpOnly\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login organizer",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/login",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"email\":\"{{organizerEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_organizer\", result.payload.token);",
+                  "pm.test(\"Cookie HttpOnly\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"HttpOnly\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login admin",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sessions/login",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"email\":\"{{adminEmail}}\",\"password\":\"{{testPassword}}\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_admin\", result.payload.token);",
+                  "pm.test(\"Cookie HttpOnly\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"HttpOnly\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "User no puede crear 403",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"title\":\"Evento entrega final\",\"description\":\"Prueba guiada de eventos y cupos\",\"category\":\"workshop\",\"date\":\"{{futureDate}}\",\"location\":\"Sala de prueba\",\"capacity\":1,\"price\":0,\"status\":\"published\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Organizador crea evento 201",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_organizer}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"title\":\"Evento entrega final\",\"description\":\"Prueba guiada de eventos y cupos\",\"category\":\"workshop\",\"date\":\"{{futureDate}}\",\"location\":\"Sala de prueba\",\"capacity\":1,\"price\":0,\"status\":\"published\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"eventId\", result.payload._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscribirse y enviar confirmación",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"quantity\":1};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"ticketId\", result.payload._id);",
+                  "pm.test(\"Confirmación SMTP aceptada\", () => pm.expect(result.payload.emailStatus).to.eql(\"sent\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscripción duplicada 409",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"quantity\":1};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([409]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Otro usuario sin cupos 409",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_admin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"quantity\":1};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([409]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis tickets con populate",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tickets/my-tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar ticket y liberar cupo",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/tickets/{{ticketId}}/cancel",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nueva inscripción por cupo liberado",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_user}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"quantity\":1};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin crea evento ajeno al organizador",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_admin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"title\":\"Evento entrega final\",\"description\":\"Prueba guiada de eventos y cupos\",\"category\":\"workshop\",\"date\":\"{{futureDate}}\",\"location\":\"Sala de prueba\",\"capacity\":1,\"price\":0,\"status\":\"published\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"otherEventId\", result.payload._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Organizador no modifica ajeno 403",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_organizer}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{otherEventId}}",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"title\":\"Evento actualizado\",\"description\":\"Prueba guiada de eventos y cupos\",\"category\":\"workshop\",\"date\":\"{{futureDate}}\",\"location\":\"Sala de prueba\",\"capacity\":1,\"price\":0};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin modifica evento del organizador",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_admin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"title\":\"Evento actualizado\",\"description\":\"Prueba guiada de eventos y cupos\",\"category\":\"workshop\",\"date\":\"{{futureDate}}\",\"location\":\"Sala de prueba\",\"capacity\":1,\"price\":0};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listado paginado y filtrado",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/events?status=published&category=workshop&page=2&limit=5&sort=date",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));",
+                  "pm.test(\"Paginación\", () => { pm.expect(result.page).to.eql(2); pm.expect(result.limit).to.eql(5); pm.expect(result.data).to.be.an(\"array\"); pm.expect(result).to.have.property(\"totalPages\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle del evento",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/events/{{eventId}}",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listado inscripciones para organizador",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_organizer}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/tickets",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta administrativa denegada al organizador",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_organizer}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta administrativa admin 200",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_admin}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar evento sin eliminar",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "currentUser={{token_organizer}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/events/{{eventId}}/status",
+            "description": "Usa cookies explícitas por rol. Mantener Disable cookie jar activado para no mezclar sesiones.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{requestBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = {\"status\":\"cancelled\"};",
+                  "Object.keys(body).forEach(key => { if (typeof body[key] === \"string\") body[key] = pm.variables.replaceIn(body[key]); });",
+                  "pm.variables.set(\"requestBody\", JSON.stringify(body));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP esperado\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "const result = pm.response.json();",
+                  "function noPassword(value) { if (!value || typeof value !== \"object\") return; Object.keys(value).forEach(key => { pm.expect(key.toLowerCase()).not.to.eql(\"password\"); noPassword(value[key]); }); }",
+                  "pm.test(\"Respuesta sin password\", () => noPassword(result));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

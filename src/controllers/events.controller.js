@@ -2,7 +2,7 @@ import { eventDTO } from '../dto/event.dto.js';
 import * as service from '../services/events.service.js';
 export async function getEvents(req, res) {
   const result = await service.listEvents(req.query);
-  res.json({ ...result, data: result.data.map(eventDTO) });
+  res.json({ status: 'success', ...result, data: result.data.map(eventDTO) });
 }
 export async function getEvent(req, res) {
   res.json({ status: 'success', payload: eventDTO(await service.getEvent(req.params.eid)) });

@@ -89,7 +89,7 @@ test('Modelo limita roles y conserva user por defecto', async () => {
 });
 test('Rutas de la primera entrega siguen disponibles', async () => {
   assert.equal((await fetch(base + '/api/health')).status, 200);
-  assert.deepEqual(await (await fetch(base + '/api/events')).json(), []);
+  assert.deepEqual(await (await fetch(base + '/api/events')).json(), { data: [], page: 1, limit: 20, total: 0, totalPages: 0 });
 });
 
 

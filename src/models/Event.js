@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 
 const eventSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
-  description: { type: String, default: '' },
+  description: { type: String, required: true, trim: true },
+  category: { type: String, required: true, trim: true },
+  price: { type: Number, required: true, default: 0, min: 0, validate: Number.isFinite },
   date: { type: Date, required: true },
   endDate: { type: Date, default: null },
   location: { type: String, required: true, trim: true },

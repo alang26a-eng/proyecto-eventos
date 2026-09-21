@@ -1,5 +1,6 @@
 import * as dao from '../dao/events.dao.js';
-export const listPublished = () => dao.listPublished();
+export const list = (filter, sort, skip, limit) => dao.list(filter, sort, skip, limit);
+export const count = filter => dao.count(filter);
 export const findById = id => dao.findById(id);
 export const create = data => dao.create(data);
 export const transaction = operation => dao.transaction(operation);

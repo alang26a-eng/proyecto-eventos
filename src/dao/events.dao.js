@@ -1,8 +1,9 @@
 import Event from '../models/Event.js';
 import mongoose from 'mongoose';
 
-export const listPublished = () => Event.find({ status: 'published' })
-  .select('title description date endDate location capacity organizer status').sort({ date: 1 }).lean();
+export const list = (filter, sort, skip, limit) => Event.find(filter)
+  .select('title description category date endDate location capacity price organizer status').sort(sort).skip(skip).limit(limit).lean();
+export const count = filter => Event.countDocuments(filter);
 export const findById = id => Event.findById(id).exec();
 export const create = data => Event.create(data);
 export const transaction = operation => mongoose.connection.transaction(operation);

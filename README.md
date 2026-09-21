@@ -1,4 +1,4 @@
-# EventHub — Pre-entregas 3, 4, 5 y 7
+# EventHub — Pre-entregas 3 a 7
 API REST de eventos e inscripciones con registro seguro, login, roles, tickets, control de cupos y confirmaciones por email. Se extiende la entrega 2 con los componentes necesarios para este flujo.
 
 ## Tecnologías
@@ -89,7 +89,7 @@ User.role admite user, organizer y admin, con user por defecto. El registro púb
 
 Las pruebas de permisos usan cookies. Para conservar los clientes anteriores, las rutas de recursos también aceptan Bearer; por tanto, sin cookie **y sin Bearer válido** responden 401. /current sigue exigiendo cookie. Logout conserva su comportamiento público e idempotente.
 
-La edición inicial admite únicamente title, description y location. Rechaza cambios de organizer, capacity, fechas o status; la cancelación tiene su ruta específica. La cancelación y las reservas comparten una escritura transaccional del evento: una vez cancelado, no se aceptan nuevas reservas. Los tickets existentes se conservan; no se implementan reembolsos ni cancelación automática de tickets.
+El PATCH heredado permite title, description y location. La pre-entrega 6 agrega PUT para editar los campos completos y PATCH /status para estados. No se puede transferir el organizador. La cancelación y las reservas comparten una escritura transaccional del evento: una vez cancelado, no se aceptan nuevas reservas. Los tickets existentes se conservan; no se implementan reembolsos ni cancelación automática de tickets.
 
 GET /api/users usa proyección explícita: _id, first_name, last_name, email y role. Nunca devuelve password ni hashes. Permite consultar todos los usuarios por páginas, con límite máximo de 100. La lista de eventos publicados continúa siendo pública.
 
@@ -132,7 +132,7 @@ Logout elimina la cookie con los mismos atributos. Un navegador que procese esa 
 | POST /api/sessions/logout | Sin body | 200 `{"status":"success","message":"Sesión cerrada"}` y eliminación de cookie |
 | GET /api/health | Sin body | 200 `{"status":"ok","message":"Servidor activo"}` |
 | GET /api/sessions | Sin body; estado del recurso | 200, mensaje de estado del recurso sessions |
-| GET /api/events | Sin body; eventos publicados | 200 `[]` si no existen eventos |
+| GET /api/events | Sin body; listado paginado | 200 `{"data":[],"page":1,"limit":20,"total":0,"totalPages":0}` si no existen eventos |
 | POST /api/events | Organizador/admin; ejemplo completo debajo | 201 `{"status":"success","payload":{"_id":"EVENTO","title":"Encuentro Backend","status":"published"}}` (extracto) |
 | POST /api/events/:eid/tickets | Autenticado, `{"quantity":1}` | 201 `{"status":"success","payload":{"status":"confirmed","reservationCode":"UUID"},"notification":"Confirmación aceptada por el servidor de correo"}` (extracto) |
 | GET /api/tickets/my-tickets | Autenticado; sin body | 200 `{"status":"success","payload":[]}` si no tiene tickets |
@@ -166,21 +166,61 @@ npm run set-role -- correo-del-organizador@example.com organizer
 ```
 El mismo comando acepta user y admin. Cambia roles en la base configurada en MONGO_URL; no usar cuentas ajenas.
 
-## Eventos
-GET /api/events devuelve los eventos published.
-POST /api/events requiere organizer o admin:
+## Pre-entrega 6: eventos y reglas de negocio
+
+El modelo Event contiene title, description, category y location obligatorios; date, endDate opcional, capacity entera positiva, price numérico no negativo (0 por defecto), status y organizer como ObjectId ref User. No se embebe al usuario. Los únicos estados son draft, published, cancelled y finished.
+
+| Método | Ruta | Acceso y respuesta |
+| --- | --- | --- |
+| POST | /api/events | organizer/admin; 201 con `{status:"success",payload:evento}` |
+| GET | /api/events | Público; 200 con data, page, limit, total y totalPages |
+| GET | /api/events/:id | Público; 200 con `{status:"success",payload:evento}`; 404 si no existe |
+| PUT | /api/events/:id | organizer propietario/admin; 200 con evento actualizado |
+| PATCH | /api/events/:id/status | organizer propietario/admin; 200 con evento actualizado |
+
+Crear un evento (usar una fecha futura):
 ```json
 {
   "title":"Encuentro Backend",
   "description":"Práctica de APIs",
+  "category":"workshop",
   "date":"2030-12-20T18:00:00.000Z",
   "endDate":"2030-12-20T21:00:00.000Z",
   "location":"Auditorio",
   "capacity":2,
+  "price":0,
   "status":"published"
 }
 ```
-La fecha debe ser futura; adaptar el ejemplo si es necesario. El organizador es siempre el usuario autenticado, aunque el body intente cambiarlo. Capacidad entera positiva. El modelo soporta draft, published, cancelled y finished; creación acepta draft o published. Para las pruebas manuales de estados, preparar fixtures cambiando status de eventos de prueba desde Atlas. No se implementa en esta entrega un CRUD completo de eventos.
+El organizador se toma siempre del usuario autenticado; un valor organizer enviado al crear se ignora. Crear acepta draft o published, con draft por defecto. PUT requiere title, description, category, date, location y capacity; price omitido queda en 0 y endDate omitido en null. El body de PUT es el ejemplo de creación sin status. No acepta organizer ni otros campos internos. Devuelve 400 si faltan datos obligatorios, la fecha no es futura, capacity no es un entero positivo o price es negativo/no numérico.
+
+Cambiar estado: `PATCH /api/events/:id/status` con `{"status":"published"}` o `{"status":"cancelled"}`. Un evento cancelled o finished no puede modificarse ni reabrirse, tampoco por admin (409). No se puede publicar un evento cuya fecha de finalización ya pasó; si no tiene endDate se usa date. Solo se permite marcar finished después de finalizar. El servicio controla estas reglas; controllers y rutas no acceden a MongoDB.
+
+La cancelación cambia status sin borrar el documento. No hay DELETE físico. Se conservan PATCH /:id para title/description/location y PATCH /:id/cancel como rutas compatibles con la pre-entrega 5, sujetas a las mismas restricciones de estado.
+
+### Filtros, paginación y orden
+
+Ejemplo: `GET /api/events?status=published&category=workshop&page=2&limit=5&sort=date`.
+
+- status: draft, published, cancelled o finished; published por defecto.
+- category y location: coincidencia exacta del texto, respetando mayúsculas; valores tratados como texto, no como operadores MongoDB.
+- dateFrom y dateTo: fechas ISO; intervalo inclusivo sobre date. Si se envía solo YYYY-MM-DD, se interpreta a las 00:00 UTC. Para incluir todo el día final, enviar su hora 23:59:59.999Z.
+- page: entero positivo, 1 por defecto. limit: entero de 1 a 100, 20 por defecto.
+- sort: date, price, title o capacity. Un prefijo `-` invierte el orden (ej. -date). Se usa _id como desempate estable.
+
+Respuesta vacía: `{"data":[],"page":1,"limit":20,"total":0,"totalPages":0}`. total cuenta solo los eventos que cumplen todos los filtros; una página fuera del rango devuelve data vacío conservando los totales. Filtros desconocidos, fechas no interpretables, rango invertido o paginación inválida responden 400.
+
+Los endpoints GET son públicos como exige la consigna: puede consultarse un evento por ID o un estado explícito, incluidos borradores. No se incluyen password, email del organizador ni objetos de usuario; organizer es una referencia.
+
+### Compatibilidad con tickets y datos existentes
+
+PUT, cambios de estado y reservas usan la misma escritura transaccional del evento. No se permite reducir capacity por debajo de la suma de quantity de tickets confirmed/pending; los cancelled no cuentan. El control funciona también ante solicitudes simultáneas y requiere MongoDB con replica set.
+
+Eventos anteriores pueden carecer de category o tener description vacía. No se cambian automáticamente los datos reales: completar esos campos con PUT antes de publicar; los tickets y referencias existentes permanecen. Para ensayar la entrega conviene crear un evento nuevo con todos los campos. El listado reemplaza la antigua respuesta array por el objeto paginado exigido en M6; actualizar clientes que dependieran de ese array.
+
+### Pruebas de M6
+
+La suite cubre los nueve casos de la consigna, campos y precio inválidos, filtros combinados con segunda página y rango de fechas, protección de estados, consulta pública y 404, reducción de capacidad y concurrencia con reservas. Ejecutar `npm test` y `npm audit` antes de publicar.
 
 ## Rutas de tickets
 | Método | Ruta | Acceso |

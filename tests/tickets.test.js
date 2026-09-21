@@ -70,13 +70,120 @@ async function api(path, method = 'GET', token, body) {
 }
 function event(overrides = {}) {
   return Event.create({
-    title: 'Encuentro', description: 'Test', date: new Date(Date.now() + 86400000),
+    title: 'Encuentro', description: 'Test', category: 'test', price: 0, date: new Date(Date.now() + 86400000),
     location: 'Auditorio', capacity: 4, organizer: users.organizer._id, status: 'published',
     ...overrides,
   });
 }
 const enroll = (e, key = 'ana', quantity = 1, extras = {}) =>
   api('/api/events/' + e._id + '/tickets', 'POST', tokens[key], { quantity, ...extras });
+
+const eventBody = (changes = {}) => ({ title: 'Taller', description: 'Clase de prueba', category: 'workshop',
+  date: new Date(Date.now() + 86400000 * 7).toISOString(), location: 'Sala CRUD', capacity: 10, price: 0, ...changes });
+
+test('Pre-entrega 6: creación valida fecha, campos obligatorios, capacidad y precio', async () => {
+  for (const changes of [{ date: new Date(0).toISOString() }, { capacity: 0 }, { capacity: -2 }, { capacity: 1.5 }, { price: -1 }, { price: '2' }, { price: null }, { title: '' }, { description: '' }, { category: '' }, { location: '' }]) {
+    const result = await cookieApi('/api/events', 'POST', 'organizer', eventBody(changes));
+    assert.equal(result.status, 400, JSON.stringify(changes));
+  }
+  assert.equal((await cookieApi('/api/events', 'POST', 'ana', eventBody())).status, 403);
+  const result = await cookieApi('/api/events', 'POST', 'organizer', eventBody({ organizer: users.admin.id }));
+  assert.equal(result.status, 201);
+  assert.equal(result.body.payload.organizer, users.organizer.id);
+  assert.equal(result.body.payload.price, 0);
+  assert.equal(result.body.payload.status, 'draft');
+  const saved = await Event.findById(result.body.payload._id);
+  assert.ok(saved.organizer instanceof mongoose.Types.ObjectId);
+});
+
+test('Pre-entrega 6: PUT propio 200, ajeno 403, admin 200 y sin sesión 401', async () => {
+  const e = await event();
+  const path = '/api/events/' + e.id;
+  assert.equal((await cookieApi(path, 'PUT', 'organizer', eventBody())).status, 200);
+  assert.equal((await cookieApi(path, 'PUT', 'other', eventBody())).status, 403);
+  assert.equal((await cookieApi(path, 'PUT', 'ana', eventBody())).status, 403);
+  assert.equal((await cookieApi(path, 'PUT', undefined, eventBody())).status, 401);
+  assert.equal((await cookieApi(path, 'PUT', 'admin', eventBody({ price: 25 }))).status, 200);
+  assert.equal((await cookieApi(path, 'PUT', 'admin', eventBody({ organizer: users.admin.id }))).status, 400);
+  assert.equal((await Event.findById(e.id)).organizer.toString(), users.organizer.id);
+});
+
+test('Pre-entrega 6: estados, cancelación lógica y eventos cancelados inmutables', async () => {
+  const e = await event({ status: 'draft' });
+  const path = '/api/events/' + e.id;
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'other', { status: 'published' })).status, 403);
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'organizer', { status: 'invalid' })).status, 400);
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'organizer', { status: 'finished' })).status, 409);
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'organizer', { status: 'published' })).status, 200);
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'admin', { status: 'cancelled' })).status, 200);
+  assert.equal((await cookieApi(path + '/status', 'PATCH', 'admin', { status: 'published' })).status, 409);
+  assert.equal((await cookieApi(path, 'PUT', 'admin', eventBody())).status, 409);
+  assert.equal((await cookieApi(path, 'PATCH', 'admin', { title: 'No permitido' })).status, 409);
+  assert.equal((await Event.findById(e.id)).status, 'cancelled');
+});
+
+test('Pre-entrega 6: finalizados por fecha o estado no pueden publicarse', async () => {
+  for (const changes of [{ status: 'finished' }, { date: new Date(Date.now() - 10000), status: 'draft' }]) {
+    const e = await event(changes);
+    assert.equal((await cookieApi('/api/events/' + e.id + '/status', 'PATCH', 'admin', { status: 'published' })).status, 409);
+  }
+  const ended = await event({ date: new Date(Date.now() - 10000) });
+  assert.equal((await cookieApi('/api/events/' + ended.id + '/status', 'PATCH', 'organizer', { status: 'finished' })).status, 200);
+});
+
+test('Pre-entrega 6: filtros combinados, segunda página, orden y totales', async () => {
+  const location = 'Filtro exclusivo M6';
+  const start = Date.now() + 86400000 * 20;
+  for (let i = 0; i < 12; i++) await event({ category: 'workshop', location, date: new Date(start + i * 86400000), price: i });
+  await event({ category: 'workshop', location, status: 'draft' });
+  await event({ category: 'otro', location });
+  const query = '/api/events?status=published&category=workshop&page=2&limit=5&location=' + encodeURIComponent(location) + '&sort=date';
+  const result = await cookieApi(query);
+  assert.equal(result.status, 200);
+  assert.deepEqual({ ...result.body, data: [] }, { data: [], page: 2, limit: 5, total: 12, totalPages: 3 });
+  assert.deepEqual(result.body.data.map(e => e.price), [5, 6, 7, 8, 9]);
+  const range = await cookieApi(query + '&dateFrom=' + encodeURIComponent(new Date(start + 2 * 86400000).toISOString()) + '&dateTo=' + encodeURIComponent(new Date(start + 6 * 86400000).toISOString()));
+  assert.equal(range.body.total, 5);
+  assert.equal(range.body.data.length, 0);
+  const descending = await cookieApi('/api/events?location=' + encodeURIComponent(location) + '&sort=-price&limit=2');
+  assert.deepEqual(descending.body.data.map(e => e.price), [11, 10]);
+});
+
+test('Pre-entrega 6: rechaza paginación/filtros inválidos sin errores 500', async () => {
+  for (const query of ['page=0','page=1.5','limit=101','sort=password','status=invalid','category[$ne]=x','dateFrom=no-es-fecha','dateFrom=2030-02-01&dateTo=2030-01-01','location=']) {
+    assert.equal((await cookieApi('/api/events?' + query)).status, 400, query);
+  }
+});
+
+test('Pre-entrega 6: detalle público y evento inexistente 404', async () => {
+  const e = await event();
+  const result = await cookieApi('/api/events/' + e.id);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.payload._id, e.id);
+  assert.equal(typeof result.body.payload.organizer, 'string');
+  assert.equal(result.body.payload.bookingVersion, undefined);
+  assert.equal((await cookieApi('/api/events/' + new mongoose.Types.ObjectId())).status, 404);
+  assert.equal((await cookieApi('/api/events/invalid')).status, 400);
+});
+
+test('Pre-entrega 6: capacidad no baja de las reservas activas y cancelados no cuentan', async () => {
+  const e = await event({ capacity: 3 });
+  const ticket = await enroll(e, 'ana', 2);
+  assert.equal(ticket.status, 201);
+  assert.equal((await cookieApi('/api/events/' + e.id, 'PUT', 'organizer', eventBody({ capacity: 1 }))).status, 409);
+  await api('/api/tickets/' + ticket.body.payload._id + '/cancel', 'PATCH', tokens.ana);
+  assert.equal((await cookieApi('/api/events/' + e.id, 'PUT', 'organizer', eventBody({ capacity: 1 }))).status, 200);
+});
+
+test('Pre-entrega 6: reducir capacidad y reservar simultáneamente conserva los cupos', async () => {
+  const e = await event({ capacity: 2 });
+  const results = await Promise.all([enroll(e, 'bob', 2), cookieApi('/api/events/' + e.id, 'PUT', 'organizer', eventBody({ capacity: 1 }))]);
+  assert.ok(results.every(result => [200, 201, 409].includes(result.status)));
+  assert.equal(results.filter(result => result.status === 409).length, 1);
+  const saved = await Event.findById(e.id);
+  const tickets = await Ticket.find({ event: e.id, status: { $in: ['confirmed', 'pending'] } });
+  assert.ok(tickets.reduce((sum, ticket) => sum + ticket.quantity, 0) <= saved.capacity);
+});
 
 async function cookieApi(path, method = 'GET', key, body) {
   const response = await fetch(base + path, { method,
@@ -86,7 +193,7 @@ async function cookieApi(path, method = 'GET', key, body) {
 }
 
 test('Pre-entrega 5: crear con cookie user 403; organizer/admin 201; sin sesión 401', async () => {
-  const data = { title: 'Roles', location: 'Sala', date: new Date(Date.now() + 86400000).toISOString(), capacity: 2, status: 'published' };
+  const data = { title: 'Roles', description: 'Test', category: 'test', location: 'Sala', date: new Date(Date.now() + 86400000).toISOString(), capacity: 2, status: 'published' };
   const forbidden = await cookieApi('/api/events', 'POST', 'ana', data);
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.message, 'No tenés permisos para realizar esta acción');
@@ -376,7 +483,7 @@ test('El modelo rechaza estados fuera del enum y cantidades fraccionarias', asyn
   await assert.rejects(new Ticket({ ...data, quantity: 1.5 }).validate(), error => Boolean(error.errors.quantity));
 });
 test('Creación de evento: user 403, organizador publicado 201 con dueño autenticado', async () => {
-  const data = { title: 'Nuevo', date: new Date(Date.now() + 86400000).toISOString(), location: 'Salón', capacity: 2, status: 'published', organizer: users.other.id };
+  const data = { title: 'Nuevo', description: 'Test', category: 'test', date: new Date(Date.now() + 86400000).toISOString(), location: 'Salón', capacity: 2, status: 'published', organizer: users.other.id };
   assert.equal((await api('/api/events', 'POST', tokens.ana, data)).status, 403);
   const result = await api('/api/events', 'POST', tokens.organizer, data);
   assert.equal(result.status, 201);

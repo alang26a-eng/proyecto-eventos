@@ -1,11 +1,11 @@
 import mongoose from 'mongoose';
-import User from '../models/User.js';
-import Event from '../models/Event.js';
-import Ticket from '../models/Ticket.js';
+import { initialize as initializeUsers } from '../dao/users.dao.js';
+import { initialize as initializeEvents } from '../dao/events.dao.js';
+import { initialize as initializeTickets } from '../dao/tickets.dao.js';
 export async function connectDatabase(uri) {
   if (!uri) throw new Error('Falta configurar MONGO_URL');
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
-  await User.init();
-  await Event.init();
-  await Ticket.init();
+  await initializeUsers();
+  await initializeEvents();
+  await initializeTickets();
 }

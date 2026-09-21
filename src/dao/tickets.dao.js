@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Ticket, { ACTIVE_STATUSES } from '../models/Ticket.js';
+export const initialize = () => Ticket.init();
 
 export const transaction = operation => mongoose.connection.transaction(operation);
 export const findById = (id, session = null) => Ticket.findById(id).session(session).exec();

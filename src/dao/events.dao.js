@@ -1,4 +1,5 @@
 import Event from '../models/Event.js';
+export const initialize = () => Event.init();
 import mongoose from 'mongoose';
 
 export const list = (filter, sort, skip, limit) => Event.find(filter)

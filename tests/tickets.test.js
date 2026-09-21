@@ -78,6 +78,29 @@ function event(overrides = {}) {
 const enroll = (e, key = 'ana', quantity = 1, extras = {}) =>
   api('/api/events/' + e._id + '/tickets', 'POST', tokens[key], { quantity, ...extras });
 
+test('M8: registro-login-evento-inscripción-mis tickets-cancelación con DTO', async () => {
+  const credentials = { email: 'flujo-m8@example.test', password: 'PruebaM8Segura123' };
+  const registration = await api('/api/sessions/register', 'POST', undefined, { ...credentials, first_name: 'Flujo', last_name: 'M8', role: 'admin' });
+  assert.equal(registration.status, 201);
+  assert.equal(registration.body.payload.role, 'user');
+  const { setUserRole } = await import('../src/services/users.service.js');
+  await setUserRole(credentials.email, 'organizer');
+  const login = await api('/api/sessions/login', 'POST', undefined, credentials);
+  assert.equal(login.status, 200);
+  const token = login.body.payload.token;
+  const created = await api('/api/events', 'POST', token, eventBody({ status: 'published' }));
+  assert.equal(created.status, 201);
+  const booked = await api('/api/events/' + created.body.payload._id + '/tickets', 'POST', token, { quantity: 1 });
+  assert.equal(booked.status, 201);
+  const own = await api('/api/tickets/my-tickets', 'GET', token);
+  assert.equal(own.body.payload.length, 1);
+  assert.deepEqual(Object.keys(own.body.payload[0].event).sort(), ['_id','title','date','location'].sort());
+  const cancelled = await api('/api/tickets/' + booked.body.payload._id + '/cancel', 'PATCH', token);
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.payload.status, 'cancelled');
+  for (const result of [registration, login, created, booked, own, cancelled]) assert.equal(JSON.stringify(result.body).includes('password'), false);
+});
+
 const eventBody = (changes = {}) => ({ title: 'Taller', description: 'Clase de prueba', category: 'workshop',
   date: new Date(Date.now() + 86400000 * 7).toISOString(), location: 'Sala CRUD', capacity: 10, price: 0, ...changes });
 

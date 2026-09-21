@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { config } from '../src/config/env.config.js';
 import { connectDatabase } from '../src/config/database.js';
-import User from '../src/models/User.js';
+import { setUserRole } from '../src/services/users.service.js';
 
 const [email, role] = process.argv.slice(2);
 try {
@@ -9,8 +9,7 @@ try {
     throw new Error('Uso: npm run set-role -- email user|organizer|admin');
   }
   await connectDatabase(config.mongoUrl);
-  const user = await User.findOneAndUpdate({ email: email.trim().toLowerCase() },
-    { $set: { role } }, { returnDocument: 'after', runValidators: true });
+  const user = await setUserRole(email, role);
   if (!user) throw new Error('El usuario debe registrarse primero');
   console.log('Rol actualizado a ' + user.role);
 } catch {
